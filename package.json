@@ -1,0 +1,17 @@
+{
+	"name": "discord-square2",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"start": "node index.js",
+		"test": "node --env-file=.env index.js"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"discord.js": "^14.15.3",
+		"express": "^4.19.2"
+	}
+}
