@@ -5,7 +5,8 @@ const client = new Client({
 	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-const cooldowns = new Collection();
+let lastMessageTime = Date.now();
+const cooldownAmount = 2000;
 
 let ownerId = "";
 client.on("ready", async () => {
@@ -39,36 +40,34 @@ client.on("messageCreate", async (message) => {
 	if (msg.length === 0) return message.react("❓");
 
 	const now = Date.now();
-	const cooldownAmount = 3000;
-
-	if (cooldowns.has(message.author.id)) {
-		const expirationTime = cooldowns.get(message.author.id) + cooldownAmount;
-
-		if (now < expirationTime) {
-			return message.react("🐢");
-		}
+	const expirationTime = lastMessageTime + cooldownAmount;
+	if (now < expirationTime) {
+		return message.react("🐢");
 	}
 
-	cooldowns.set(message.author.id, now);
-	setTimeout(() => cooldowns.delete(message.author.id), cooldownAmount);
+	lastMessageTime = now;
 
 	message.reply(`${config.emojis.loading}⠀`).then((reply) => {
-		fetch(process.env.GPT_ENDPOINT, {
-			headers: {
-				accept: "text/plain",
-				"accept-language": "en-US,en;q=0.9",
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({
-				prompt: `${message.author.username}: ${msg}`,
-				channelId: `${message.channel.id}-${uniqueId}`,
-			}),
-			method: "POST",
-		})
-			.then((r) => r.json())
-			.then((json) => {
-				reply.edit(json.response);
-			});
+		try {
+			fetch(process.env.GPT_ENDPOINT, {
+				headers: {
+					accept: "text/plain",
+					"accept-language": "en-US,en;q=0.9",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					prompt: `${message.author.username}: ${msg}`,
+					channelId: `${message.channel.id}-${uniqueId}`,
+				}),
+				method: "POST",
+			})
+				.then((r) => r.json())
+				.then((json) => {
+					reply.edit(json.response);
+				});
+		} catch {
+			reply.edit("-# ❌ Something went wrong.");
+		}
 	});
 });
 
