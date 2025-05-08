@@ -6,7 +6,7 @@ const client = new Client({
 });
 
 let lastMessageTime = Date.now();
-const cooldownAmount = 2000;
+const cooldownAmount = 5000;
 
 let ownerId = "";
 client.on("ready", async () => {
