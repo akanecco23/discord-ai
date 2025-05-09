@@ -14,6 +14,10 @@ const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT.replaceAll(
 	"\\n",
 	"\n",
 ).replaceAll('\\"', '"');
+const REINFORCEMENT_PROMPT = process.env.REINFORCEMENT_PROMPT.replaceAll(
+	"\\n",
+	"\n",
+).replaceAll('\\"', '"');
 
 let lastMessageTime = Date.now();
 const cooldownAmount = 2000;
@@ -35,6 +39,7 @@ client.on("ready", async () => {
 let uniqueId = Date.now();
 /** @type {Record<string, import("@google/genai").Content[]>} */
 let conversations = {};
+let counter = {};
 
 /** @type {import("@google/genai").SafetySetting[]} */
 const safetySettings = [
@@ -55,6 +60,7 @@ client.on("messageCreate", async (message) => {
 	if (message.content === "sq reset" && message.author.id === ownerId) {
 		uniqueId = Date.now();
 		conversations = {};
+		counter = {};
 		return message.react("✅");
 	}
 
@@ -97,6 +103,7 @@ client.on("messageCreate", async (message) => {
 					},
 				],
 			});
+			counter[cId] = 0;
 		}
 		conversations[cId].push({
 			role: "user",
@@ -106,6 +113,17 @@ client.on("messageCreate", async (message) => {
 				},
 			],
 		});
+		counter[cId]++;
+		if (counter[cId] % 5 === 0) {
+			conversations[cId].push({
+				role: "user",
+				parts: [
+					{
+						text: `A message from the SYSTEM\nRemember: ${REINFORCEMENT_PROMPT}`,
+					},
+				],
+			});
+		}
 		const res = await ai.models.generateContent({
 			model: "gemma-3-27b-it",
 			contents: conversations[cId],
