@@ -72,7 +72,7 @@ client.on("messageCreate", async (message) => {
 
 	lastMessageTime = now;
 
-	const reply = await message.reply(`${config.emojis.loading} `);
+	const reply = await message.reply(`${config.emojis.loading}⠀`);
 	try {
 		const cId = `${message.channel.id}-${uniqueId}`;
 		if (!conversations[cId]) {
