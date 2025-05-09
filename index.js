@@ -36,6 +36,19 @@ let uniqueId = Date.now();
 /** @type {Record<string, import("@google/genai").Content[]>} */
 let conversations = {};
 
+/** @type {import("@google/genai").SafetySetting[]} */
+const safetySettings = [
+	"HARM_CATEGORY_UNSPECIFIED",
+	"HARM_CATEGORY_HATE_SPEECH",
+	"HARM_CATEGORY_DANGEROUS_CONTENT",
+	"HARM_CATEGORY_HARASSMENT",
+	"HARM_CATEGORY_SEXUALLY_EXPLICIT",
+	"HARM_CATEGORY_CIVIC_INTEGRITY",
+].map((c) => ({
+	category: c,
+	threshold: "OFF",
+}));
+
 client.on("messageCreate", async (message) => {
 	if (!message.guild) return;
 	if (message.author.bot) return;
@@ -97,6 +110,9 @@ client.on("messageCreate", async (message) => {
 		const res = await ai.models.generateContent({
 			model: "gemma-3-27b-it",
 			contents: conversations[cId],
+			config: {
+				safetySettings: safetySettings,
+			},
 		});
 		let response = res.text;
 		for (const r of ["<start_of_turn>", "<end_of_turn>"]) {
