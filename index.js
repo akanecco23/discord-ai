@@ -1,22 +1,40 @@
 require("./server.js");
+const { Models, GoogleGenAI } = require("@google/genai");
 const config = require("./config.json");
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const client = new Client({
-	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+	intents: [
+		GatewayIntentBits.Guilds,
+		GatewayIntentBits.GuildMessages,
+		GatewayIntentBits.MessageContent,
+	],
 });
 
+const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT.replaceAll(
+	"\\n",
+	"\n",
+).replaceAll('\\"', '"');
+
 let lastMessageTime = Date.now();
-const cooldownAmount = 5000;
+const cooldownAmount = 2000;
+
+const ai = new GoogleGenAI({
+	apiKey: process.env.API_KEY,
+});
 
 let ownerId = "";
 client.on("ready", async () => {
 	console.log(`Logged in as ${client.user.tag}`);
+
+	console.log("System prompt:\n", SYSTEM_PROMPT);
 
 	await client.application.fetch();
 	ownerId = client.application.owner.id;
 });
 
 let uniqueId = Date.now();
+/** @type {Record<string, import("@google/genai").Content[]>} */
+let conversations = {};
 
 client.on("messageCreate", async (message) => {
 	if (!message.guild) return;
@@ -24,12 +42,19 @@ client.on("messageCreate", async (message) => {
 
 	if (message.content === "sq reset" && message.author.id === ownerId) {
 		uniqueId = Date.now();
+		conversations = {};
 		return message.react("✅");
 	}
 
 	let msg = "";
 	const prefixRegex = new RegExp(`^(<@!?${client.user.id}>)\\s*`, "i");
-	if (!(prefixRegex.test(message.content) || message.mentions?.repliedUser?.id === client.user.id)) return;
+	if (
+		!(
+			prefixRegex.test(message.content) ||
+			message.mentions?.repliedUser?.id === client.user.id
+		)
+	)
+		return;
 
 	if (message.mentions?.repliedUser?.id === client.user.id) {
 		msg = message.content;
@@ -47,28 +72,59 @@ client.on("messageCreate", async (message) => {
 
 	lastMessageTime = now;
 
-	message.reply(`${config.emojis.loading}⠀`).then((reply) => {
-		try {
-			fetch(process.env.GPT_ENDPOINT, {
-				headers: {
-					accept: "text/plain",
-					"accept-language": "en-US,en;q=0.9",
-					"content-type": "application/json",
-				},
-				body: JSON.stringify({
-					prompt: `${message.author.username}: ${msg}`,
-					channelId: `${message.channel.id}-${uniqueId}`,
-				}),
-				method: "POST",
-			})
-				.then((r) => r.json())
-				.then((json) => {
-					reply.edit(json.response);
-				});
-		} catch {
-			reply.edit("-# ❌ Something went wrong.");
+	const reply = await message.reply(`${config.emojis.loading} `);
+	try {
+		const cId = `${message.channel.id}-${uniqueId}`;
+		if (!conversations[cId]) {
+			conversations[cId] = [];
+			conversations[cId].push({
+				role: "user",
+				parts: [
+					{
+						text: SYSTEM_PROMPT,
+					},
+				],
+			});
 		}
-	});
+		conversations[cId].push({
+			role: "user",
+			parts: [
+				{
+					text: `${message.author.username}: ${msg}`,
+				},
+			],
+		});
+		const res = await ai.models.generateContent({
+			model: "gemma-3-27b-it",
+			contents: conversations[cId],
+		});
+		let response = res.text;
+		for (const r of ["<start_of_turn>", "<end_of_turn>"]) {
+			response = response.replaceAll(r, "");
+		}
+		response = response.trim();
+		conversations[cId].push({
+			role: "model",
+			parts: [
+				{
+					text: response,
+				},
+			],
+		});
+
+		if (conversations[cId].length > 100) {
+			conversations[cId] = conversations[cId].slice(-100);
+		}
+
+		await reply.edit(response);
+	} catch (e) {
+		console.error(e);
+		try {
+			await reply.edit("❌ Something went wrong.");
+		} catch {
+			await message.reply("❌ Something went wrong.");
+		}
+	}
 });
 
 client.login(process.env.TOKEN);
