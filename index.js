@@ -38,7 +38,6 @@ let conversations = {};
 
 /** @type {import("@google/genai").SafetySetting[]} */
 const safetySettings = [
-	"HARM_CATEGORY_UNSPECIFIED",
 	"HARM_CATEGORY_HATE_SPEECH",
 	"HARM_CATEGORY_DANGEROUS_CONTENT",
 	"HARM_CATEGORY_HARASSMENT",
