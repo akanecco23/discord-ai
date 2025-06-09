@@ -33,7 +33,7 @@ client.on("ready", async () => {
 	console.log("System prompt:\n", SYSTEM_PROMPT);
 
 	await client.application.fetch();
-	ownerId = client.application.owner.id;
+	ownerId = process.env.OWNER_ID || client.application.owner.id;
 });
 
 let uniqueId = Date.now();
