@@ -1,7 +1,7 @@
 require("./server.js");
-const { Models, GoogleGenAI } = require("@google/genai");
 const config = require("./config.json");
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, Events } = require("discord.js");
+
 const client = new Client({
 	intents: [
 		GatewayIntentBits.Guilds,
@@ -22,12 +22,8 @@ const REINFORCEMENT_PROMPT = process.env.REINFORCEMENT_PROMPT.replaceAll(
 let lastMessageTime = Date.now();
 const cooldownAmount = 2000;
 
-const ai = new GoogleGenAI({
-	apiKey: process.env.API_KEY,
-});
-
 let ownerId = "";
-client.on("ready", async () => {
+client.on(Events.ClientReady, async () => {
 	console.log(`Logged in as ${client.user.tag}`);
 
 	console.log("System prompt:\n", SYSTEM_PROMPT);
@@ -37,23 +33,21 @@ client.on("ready", async () => {
 });
 
 let uniqueId = Date.now();
-/** @type {Record<string, import("@google/genai").Content[]>} */
 let conversations = {};
 let counter = {};
 
-/** @type {import("@google/genai").SafetySetting[]} */
-const safetySettings = [
-	"HARM_CATEGORY_HATE_SPEECH",
-	"HARM_CATEGORY_DANGEROUS_CONTENT",
-	"HARM_CATEGORY_HARASSMENT",
-	"HARM_CATEGORY_SEXUALLY_EXPLICIT",
-	"HARM_CATEGORY_CIVIC_INTEGRITY",
-].map((c) => ({
-	category: c,
-	threshold: "OFF",
-}));
+const appendConversation = (cId, role, msg) => {
+	if (conversations[cId]?.at(-1)?.role === role) {
+		conversations[cId].at(-1).content += `\n\n${msg}`;
+	} else {
+		conversations[cId].push({
+			role,
+			content: msg,
+		});
+	}
+};
 
-client.on("messageCreate", async (message) => {
+client.on(Events.MessageCreate, async (message) => {
 	if (!message.guild) return;
 	if (message.author.bot) return;
 
@@ -90,60 +84,66 @@ client.on("messageCreate", async (message) => {
 
 	lastMessageTime = now;
 
+	// message.reply(`${config.emojis.loading}⠀`).then((reply) => {
+	// 	try {
+	// 		fetch(process.env.GPT_ENDPOINT, {
+	// 			headers: {
+	// 				accept: "text/plain",
+	// 				"accept-language": "en-US,en;q=0.9",
+	// 				"content-type": "application/json",
+	// 			},
+	// 			body: JSON.stringify({
+	// 				prompt: `${message.author.username}: ${msg}`,
+	// 				channelId: `${message.channel.id}-${uniqueId}`,
+	// 			}),
+	// 			method: "POST",
+	// 		})
+	// 			.then((r) => r.json())
+	// 			.then((json) => {
+	// 				reply.edit(json.response);
+	// 			});
+	// 	} catch {
+	// 		reply.edit("-# ❌ Something went wrong.");
+	// 	}
+	// });
 	const reply = await message.reply(`${config.emojis.loading}⠀`);
 	try {
-		const cId = `${message.channel.id}-${uniqueId}`;
+		const cId = `${message.channel.id}`;
 		if (!conversations[cId]) {
 			conversations[cId] = [];
-			conversations[cId].push({
-				role: "user",
-				parts: [
-					{
-						text: SYSTEM_PROMPT,
-					},
-				],
-			});
+			appendConversation(cId, "user", SYSTEM_PROMPT);
 			counter[cId] = 0;
 		}
-		conversations[cId].push({
-			role: "user",
-			parts: [
-				{
-					text: `${message.author.username}: ${msg}`,
-				},
-			],
-		});
+		appendConversation(cId, "user", `${message.author.username}: ${msg}`);
 		counter[cId]++;
 		if (counter[cId] % 5 === 0) {
-			conversations[cId].push({
-				role: "user",
-				parts: [
-					{
-						text: `A message from the SYSTEM\nRemember: ${REINFORCEMENT_PROMPT}`,
-					},
-				],
-			});
+			appendConversation(
+				cId,
+				"user",
+				`A message from the SYSTEM\nRemember: ${REINFORCEMENT_PROMPT}`,
+			);
 		}
-		const res = await ai.models.generateContent({
-			model: "gemma-3-27b-it",
-			contents: conversations[cId],
-			config: {
-				safetySettings: safetySettings,
+		const res = await fetch(process.env.GPT_ENDPOINT, {
+			headers: {
+				accept: "application/json",
+				"content-type": "application/json",
+				Authorization: `Bearer ${process.env.API_KEY}`,
 			},
-		});
-		let response = res.text;
-		for (const r of ["<start_of_turn>", "<end_of_turn>"]) {
-			response = response.replaceAll(r, "");
-		}
+			body: JSON.stringify({
+				model: "google/gemma-3n-e4b-it",
+				messages: conversations[cId],
+				max_tokens: 256,
+				temperature: 0.6,
+				top_p: 0.9,
+				frequency_penalty: 0.0,
+				presence_penalty: 0.0,
+				stream: false,
+			}),
+			method: "POST",
+		}).then((r) => r.json());
+		let response = res.choices[0].message.content;
 		response = response.trim();
-		conversations[cId].push({
-			role: "model",
-			parts: [
-				{
-					text: response,
-				},
-			],
-		});
+		appendConversation(cId, "model", response);
 
 		if (conversations[cId].length > 100) {
 			conversations[cId] = conversations[cId].slice(-100);
@@ -154,16 +154,18 @@ client.on("messageCreate", async (message) => {
 		console.error(e);
 		try {
 			await reply.edit("❌ Something went wrong.");
-		} catch {
-			await message.reply("❌ Something went wrong.");
-		}
+		} catch {}
 	}
 });
 
 client.login(process.env.TOKEN);
 
 // dont crash
-process.on("unhandledRejection", (reason, p) => {});
-process.on("uncaughtException", (err, origin) => {});
+process.on("unhandledRejection", (reason, p) => {
+	console.log("Unhandled Rejection at: Promise", p, "reason:", reason);
+});
+process.on("uncaughtException", (err, origin) => {
+	console.log("Uncaught Exception:", err, "origin:", origin);
+});
 process.on("uncaughtExceptionMonitor", (err, origin) => {});
 process.on("multipleResolves", (type, promise, reason) => {});
