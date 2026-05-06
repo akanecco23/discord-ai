@@ -84,28 +84,6 @@ client.on(Events.MessageCreate, async (message) => {
 
 	lastMessageTime = now;
 
-	// message.reply(`${config.emojis.loading}⠀`).then((reply) => {
-	// 	try {
-	// 		fetch(process.env.GPT_ENDPOINT, {
-	// 			headers: {
-	// 				accept: "text/plain",
-	// 				"accept-language": "en-US,en;q=0.9",
-	// 				"content-type": "application/json",
-	// 			},
-	// 			body: JSON.stringify({
-	// 				prompt: `${message.author.username}: ${msg}`,
-	// 				channelId: `${message.channel.id}-${uniqueId}`,
-	// 			}),
-	// 			method: "POST",
-	// 		})
-	// 			.then((r) => r.json())
-	// 			.then((json) => {
-	// 				reply.edit(json.response);
-	// 			});
-	// 	} catch {
-	// 		reply.edit("-# ❌ Something went wrong.");
-	// 	}
-	// });
 	const reply = await message.reply(`${config.emojis.loading}⠀`);
 	try {
 		const cId = `${message.channel.id}`;
