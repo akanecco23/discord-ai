@@ -95,7 +95,6 @@ client.on(Events.MessageCreate, async (message) => {
 		try {
 			await message.fetchReference().then((ref) => {
 				if (ref.content) {
-					console.log(ref.content);
 					appendConversation(
 						cId,
 						"user",
