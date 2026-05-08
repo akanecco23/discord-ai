@@ -92,7 +92,23 @@ client.on(Events.MessageCreate, async (message) => {
 			appendConversation(cId, "user", SYSTEM_PROMPT);
 			counter[cId] = 0;
 		}
-		appendConversation(cId, "user", `${message.author.username}: ${msg}`);
+		try {
+			await message.fetchReference().then((ref) => {
+				if (ref.content) {
+					console.log(ref.content);
+					appendConversation(
+						cId,
+						"user",
+						`Replying to a message from ${ref.author.username} (<@${ref.author.id}>): ${ref.content}`,
+					);
+				}
+			});
+		} catch {}
+		appendConversation(
+			cId,
+			"user",
+			`${message.author.username} (<@${message.author.id}>): ${msg}`,
+		);
 		counter[cId]++;
 		if (counter[cId] % 5 === 0) {
 			appendConversation(
