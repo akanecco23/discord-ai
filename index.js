@@ -142,7 +142,7 @@ client.on(Events.MessageCreate, async (message) => {
 			conversations[cId] = conversations[cId].slice(-100);
 		}
 
-		await reply.edit(response.replaceAll("*", "\\*").replaceAll("_", "\\_"));
+		await reply.edit(response);
 	} catch (e) {
 		console.error(e);
 		try {
