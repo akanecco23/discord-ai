@@ -131,6 +131,9 @@ client.on(Events.MessageCreate, async (message) => {
 				frequency_penalty: process.env.FREQUENCY_PENALTY || 0.0,
 				presence_penalty: process.env.PRESENCE_PENALTY || 0.0,
 				stream: false,
+        chat_template_kwargs: {
+          enable_thinking: false
+        }
 			}),
 			method: "POST",
 		}).then((r) => r.json());
